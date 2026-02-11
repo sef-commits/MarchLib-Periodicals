@@ -395,28 +395,23 @@
         }
       };
 
-      // Sanitize data for Firebase (remove undefined, functions, etc.)
-      const sanitizeForFirebase = (obj) => {
-        if (obj === null) return null;
-        if (obj === undefined) return '';
-        if (typeof obj === 'function') return '';
-        if (typeof obj === 'string' || typeof obj === 'number' || typeof obj === 'boolean') {
-          return obj;
-        }
-        if (Array.isArray(obj)) {
-          return obj.map(item => sanitizeForFirebase(item));
-        }
-        if (typeof obj === 'object') {
-          const sanitized = {};
-          for (const key in obj) {
-            if (obj.hasOwnProperty(key)) {
-              const sanitizedKey = String(key).replace(/[^a-zA-Z0-9_]/g, '_'); // Replace anything that isn't a letter, number, or underscore
-              sanitized[sanitizedKey] = sanitizeForFirebase(obj[key]);
-            }
+      // Sanitize a single data row for Firebase - no recursion
+      const sanitizeRow = (row) => {
+        const sanitized = {};
+        for (const key in row) {
+          if (!row.hasOwnProperty(key)) continue;
+          const sanitizedKey = String(key).replace(/[^a-zA-Z0-9_]/g, '_');
+          if (!sanitizedKey) continue;
+          const val = row[key];
+          if (val === null || val === undefined) {
+            sanitized[sanitizedKey] = '';
+          } else if (typeof val === 'object') {
+            sanitized[sanitizedKey] = JSON.stringify(val).substring(0, 500);
+          } else {
+            sanitized[sanitizedKey] = String(val).substring(0, 1000);
           }
-          return sanitized;
         }
-        return String(obj);
+        return sanitized;
       };
 
       // Confirm column selection and save to Firebase
@@ -486,8 +481,20 @@
           console.log('Starting Firebase upload...');
           const dbRef = database.ref('databases');
           
-          // Sanitize the entire database object before uploading
-          const sanitizedDatabase = sanitizeForFirebase(newDatabase);
+          // Sanitize rows individually - no recursion risk
+          const sanitizedRows = uniqueRows.map(row => ({
+            title: String(row.title || '').substring(0, 500),
+            fullData: sanitizeRow(row.fullData)
+          }));
+
+          const sanitizedDatabase = {
+            name: dbName,
+            rows: sanitizedRows,
+            titleColumn: selectedColumn, // Keep original for display
+            allColumns: previewData.headers.map(h => String(h)), // Keep original names for display
+            sampleTitles: uniqueRows.slice(0, 5).map(r => String(r.title || '')),
+            uploadedAt: new Date().toISOString()
+          };
           
           console.log('Sanitized database ready, uploading...');
           await dbRef.push(sanitizedDatabase);
@@ -1162,11 +1169,14 @@
 
                   <div style={{ background: '#f8f7f5', borderRadius: '6px', padding: '1.5rem', border: '1px solid #e0ddd8' }}>
                     {selectedPeriodical.columns.map((column, idx) => {
-                      const value = selectedPeriodical.fullData[column];
+                      // Look up value using sanitized key (matching how data was stored)
+                      const sanitizedKey = String(column).replace(/[^a-zA-Z0-9_]/g, '_');
+                      const value = selectedPeriodical.fullData[sanitizedKey] || selectedPeriodical.fullData[column];
                       const displayValue = value === null || value === undefined || String(value).trim() === '' 
                         ? '(not provided)' 
                         : String(value);
-                      const isTitle = column === selectedPeriodical.titleColumn;
+                      const sanitizedTitleCol = String(selectedPeriodical.titleColumn).replace(/[^a-zA-Z0-9_]/g, '_');
+                      const isTitle = sanitizedKey === sanitizedTitleCol;
                       
                       return (
                         <div key={idx} style={{
