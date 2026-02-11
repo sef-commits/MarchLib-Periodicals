@@ -410,7 +410,7 @@
           const sanitized = {};
           for (const key in obj) {
             if (obj.hasOwnProperty(key)) {
-              const sanitizedKey = String(key).replace(/[.#$[\]()/ ]/g, '_'); // Firebase doesn't allow these chars in keys
+              const sanitizedKey = String(key).replace(/[^a-zA-Z0-9_]/g, '_'); // Replace anything that isn't a letter, number, or underscore
               sanitized[sanitizedKey] = sanitizeForFirebase(obj[key]);
             }
           }
