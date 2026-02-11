@@ -252,8 +252,8 @@
                     decoded: XLSX.utils.decode_cell(addr)
                   })).sort((a, b) => a.decoded.r - b.decoded.r || a.decoded.c - b.decoded.c);
                   
-                  const maxRow = Math.max(...allCells.map(c => c.decoded.r));
-                  const maxCol = Math.max(...allCells.map(c => c.decoded.c));
+                  const maxRow = allCells.reduce((m, c) => Math.max(m, c.decoded.r), 0);
+                  const maxCol = allCells.reduce((m, c) => Math.max(m, c.decoded.c), 0);
                   
                   const forceData = [];
                   for (let r = 0; r <= maxRow; r++) {
@@ -293,8 +293,8 @@
                     decoded: XLSX.utils.decode_cell(addr)
                   })).sort((a, b) => a.decoded.r - b.decoded.r || a.decoded.c - b.decoded.c);
                   
-                  const maxRow = Math.max(...allCells.map(c => c.decoded.r));
-                  const maxCol = Math.max(...allCells.map(c => c.decoded.c));
+                  const maxRow = allCells.reduce((m, c) => Math.max(m, c.decoded.r), 0);
+                  const maxCol = allCells.reduce((m, c) => Math.max(m, c.decoded.c), 0);
                   
                   const forceData = [];
                   for (let r = 0; r <= maxRow; r++) {
@@ -618,7 +618,7 @@
                 Cross-reference periodical titles against your library's database subscriptions
               </p>
               <p style={{ margin: 0, fontSize: '0.8rem', color: '#636e72', marginTop: '0.5rem' }}>
-                v4 — {new Date().toLocaleDateString()}
+                v5 — {new Date().toLocaleDateString()}
               </p>
             </div>
           </div>
