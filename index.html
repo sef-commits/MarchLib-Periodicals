@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Periodical Checker</title>
+  <title>March Library Periodical Checker</title>
   
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -606,7 +606,7 @@
                 textTransform: 'uppercase',
                 marginBottom: '0.5rem'
               }}>
-                Periodical Checker
+                March Library Periodical Checker
               </h1>
               <p style={{
                 margin: 0,
@@ -615,7 +615,7 @@
                 fontWeight: 300,
                 letterSpacing: '0.5px'
               }}>
-                Cross-reference periodical titles against March Library's database subscriptions
+                Cross-reference periodical titles database coverage
               </p>
               <p style={{ margin: 0, fontSize: '0.8rem', color: '#636e72', marginTop: '0.5rem' }}>
                 v5 — {new Date().toLocaleDateString()}
@@ -654,7 +654,7 @@
               }}>
                 Upload CSV or Excel files (.xlsx, .xls) containing periodical titles from each database you subscribe to.
                 <br />
-                <strong style={{ color: '#00b894', marginTop: '0.5rem', display: 'inline-block' }}>
+                <strong style={{ color: '#000000', marginTop: '0.5rem', display: 'inline-block' }}>
                   ☁️ Databases are shared with your team - everyone sees the same uploads!
                 </strong>
               </p>
@@ -668,7 +668,7 @@
                 cursor: 'pointer',
                 fontSize: '1rem',
                 fontWeight: 500,
-                border: '2px solid #d4af37'
+                border: '2px solid #000000'
               }}>
                 <input
                   type="file"
@@ -762,7 +762,7 @@
                   fontFamily: 'Georgia, serif',
                   color: '#2d3436',
                   fontWeight: 400,
-                  borderBottom: '2px solid #d4af37',
+                  borderBottom: '2px solid #000000',
                   paddingBottom: '0.75rem',
                   display: 'inline-block'
                 }}>
@@ -790,7 +790,7 @@
                     disabled={!searchQuery.trim() || isSearching}
                     style={{
                       padding: '1rem 2.5rem',
-                      background: searchQuery.trim() ? 'linear-gradient(135deg, #d4af37 0%, #f4d03f 100%)' : '#dfe6e9',
+                      background: searchQuery.trim() ? 'linear-gradient(135deg, #000000 0%, #f4d03f 100%)' : '#dfe6e9',
                       color: searchQuery.trim() ? '#2d3436' : '#636e72',
                       border: 'none',
                       borderRadius: '6px',
