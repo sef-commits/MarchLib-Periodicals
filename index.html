@@ -395,124 +395,67 @@
         }
       };
 
-      // Sanitize a single data row for Firebase - no recursion
-      const sanitizeRow = (row) => {
-        const sanitized = {};
-        for (const key in row) {
-          if (!row.hasOwnProperty(key)) continue;
-          const sanitizedKey = String(key).replace(/[^a-zA-Z0-9_]/g, '_');
-          if (!sanitizedKey) continue;
-          const val = row[key];
-          if (val === null || val === undefined) {
-            sanitized[sanitizedKey] = '';
-          } else if (typeof val === 'object') {
-            sanitized[sanitizedKey] = JSON.stringify(val).substring(0, 500);
-          } else {
-            sanitized[sanitizedKey] = String(val).substring(0, 1000);
-          }
-        }
-        return sanitized;
-      };
+
 
       // Confirm column selection and save to Firebase
       const confirmColumnSelection = async (selectedColumn) => {
         if (!previewData) return;
         
         console.log('Processing column:', selectedColumn);
-        console.log('Total rows to process:', previewData.allData.length);
         
-        const rows = previewData.allData
-          .map((row, idx) => {
-            const title = row[selectedColumn];
-            if (!title || String(title).trim() === '') return null;
-            
-            // Sanitize the full data row
-            const sanitizedRow = {};
-            for (const key in row) {
-              if (row.hasOwnProperty(key)) {
-                const value = row[key];
-                sanitizedRow[key] = (value === null || value === undefined) ? '' : String(value).trim();
-              }
-            }
-            
-            return {
-              title: String(title).trim(),
-              fullData: sanitizedRow
-            };
-          })
-          .filter(item => item !== null);
-
-        console.log('Rows after filtering:', rows.length);
-
-        const uniqueRows = [];
+        // Store columns as plain string array
+        const columns = previewData.headers.map(h => String(h || ''));
+        const titleColIndex = columns.indexOf(selectedColumn);
+        
+        // Build rows as { title: string, values: string[] } - NO nested objects
         const seenTitles = new Set();
-        for (const row of rows) {
-          if (!seenTitles.has(row.title)) {
-            seenTitles.add(row.title);
-            uniqueRows.push(row);
-          }
+        const uniqueRows = [];
+        
+        for (const row of previewData.allData) {
+          const title = row[selectedColumn];
+          if (!title || String(title).trim() === '') continue;
+          const titleStr = String(title).trim();
+          if (seenTitles.has(titleStr)) continue;
+          seenTitles.add(titleStr);
+          
+          // Each row is just a flat array of plain strings
+          const values = columns.map(col => {
+            const v = row[col];
+            if (v === null || v === undefined) return '';
+            return String(v).trim();
+          });
+          
+          uniqueRows.push({ title: titleStr, values: values });
         }
 
         console.log('Unique rows:', uniqueRows.length);
 
-        const dbName = previewData.fileName.replace(/\.(csv|xlsx|xls)$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
-        
-        const newDatabase = {
+        const dbName = previewData.fileName
+          .replace(/\.(csv|xlsx|xls)$/i, '')
+          .replace(/[^a-zA-Z0-9_-]/g, '_');
+
+        const dbToSave = {
           name: dbName,
           rows: uniqueRows,
+          columns: columns,
+          titleColIndex: titleColIndex,
           titleColumn: selectedColumn,
-          allColumns: previewData.headers.map(h => String(h)),
           sampleTitles: uniqueRows.slice(0, 5).map(r => r.title),
           uploadedAt: new Date().toISOString()
         };
 
-        console.log('Database object created:', {
-          name: newDatabase.name,
-          rowCount: newDatabase.rows.length,
-          columns: newDatabase.allColumns.length
-        });
-
-        // Save to Firebase
         try {
-          if (!database) {
-            throw new Error('Firebase database not initialized');
-          }
-          
-          console.log('Starting Firebase upload...');
+          if (!database) throw new Error('Firebase database not initialized');
+          console.log('Uploading to Firebase...');
           const dbRef = database.ref('databases');
-          
-          // Store fullData as a JSON string - sidesteps ALL Firebase key restrictions
-          const sanitizedRows = uniqueRows.map(row => ({
-            title: String(row.title || '').substring(0, 500),
-            fullDataJson: JSON.stringify(row.fullData)
-          }));
-
-          const sanitizedDatabase = {
-            name: dbName,
-            rows: sanitizedRows,
-            titleColumn: selectedColumn,
-            allColumns: previewData.headers.map(h => String(h)),
-            sampleTitles: uniqueRows.slice(0, 5).map(r => String(r.title || '')),
-            uploadedAt: new Date().toISOString()
-          };
-          
-          console.log('Database ready, uploading...');
-          await dbRef.push(sanitizedDatabase);
-          
-          console.log('✓ Saved database to Firebase:', newDatabase.name);
+          await dbRef.push(dbToSave);
+          console.log('Saved to Firebase:', dbName);
         } catch (error) {
-          console.error('✗ Error saving to Firebase:', error);
-          console.error('Error details:', {
-            message: error.message,
-            code: error.code,
-            stack: error.stack
-          });
-          alert('Error saving database: ' + (error.message || 'Unknown error') + '\n\nCheck console (F12) for details.');
-          
-          // Don't proceed to next file on error
+          console.error('Error saving to Firebase:', error);
+          alert('Error saving database: ' + (error.message || 'Unknown error'));
           return;
         }
-        
+
         const newQueue = fileQueue.slice(1);
         setFileQueue(newQueue);
         setPreviewData(null);
@@ -589,7 +532,7 @@
             const matches = db.rows
               .map(row => ({
                 title: row.title,
-                fullData: row.fullDataJson ? JSON.parse(row.fullDataJson) : (row.fullData || {}),
+                values: row.values || [],
                 match: fuzzyMatch(searchQuery, row.title)
               }))
               .filter(item => item.match.score > 60)
@@ -598,8 +541,9 @@
             
             return {
               database: db.name,
-              databaseColumns: db.allColumns,
+              databaseColumns: db.columns || db.allColumns || [],
               titleColumn: db.titleColumn,
+              titleColIndex: db.titleColIndex,
               databaseId: db.id,
               matches: matches,
               hasMatch: matches.length > 0,
@@ -674,7 +618,7 @@
                 Cross-reference periodical titles against your library's database subscriptions
               </p>
               <p style={{ margin: 0, fontSize: '0.8rem', color: '#636e72', marginTop: '0.5rem' }}>
-                v3 — {new Date().toLocaleDateString()}
+                v4 — {new Date().toLocaleDateString()}
               </p>
             </div>
           </div>
@@ -934,10 +878,11 @@
                             key={mIndex}
                             onClick={() => setSelectedPeriodical({
                               title: match.title,
-                              fullData: match.fullData,
+                              values: match.values,
                               database: result.database,
                               columns: result.databaseColumns,
-                              titleColumn: result.titleColumn
+                              titleColumn: result.titleColumn,
+                              titleColIndex: result.titleColIndex
                             })}
                             style={{
                               padding: '0.75rem',
@@ -1172,11 +1117,11 @@
 
                   <div style={{ background: '#f8f7f5', borderRadius: '6px', padding: '1.5rem', border: '1px solid #e0ddd8' }}>
                     {selectedPeriodical.columns.map((column, idx) => {
-                      const value = selectedPeriodical.fullData[column];
+                      const value = selectedPeriodical.values ? selectedPeriodical.values[idx] : '';
                       const displayValue = value === null || value === undefined || String(value).trim() === '' 
                         ? '(not provided)' 
                         : String(value);
-                      const isTitle = column === selectedPeriodical.titleColumn;
+                      const isTitle = idx === selectedPeriodical.titleColIndex;
                       
                       return (
                         <div key={idx} style={{
