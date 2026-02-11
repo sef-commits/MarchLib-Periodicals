@@ -39,7 +39,7 @@
     // ========================================
     // REPLACE THIS WITH YOUR FIREBASE CONFIG
     // Get this from: Firebase Console > Project Settings > Your apps > Firebase SDK snippet
-   const firebaseConfig = {
+    const firebaseConfig = {
   apiKey: "AIzaSyAvSPaF41uNVctGvoTKQzaIV8HUbzNSgC8",
   authDomain: "periodical-checker.firebaseapp.com",
   databaseURL: "https://periodical-checker-default-rtdb.firebaseio.com",
@@ -481,22 +481,22 @@
           console.log('Starting Firebase upload...');
           const dbRef = database.ref('databases');
           
-          // Sanitize rows individually - no recursion risk
+          // Store fullData as a JSON string - sidesteps ALL Firebase key restrictions
           const sanitizedRows = uniqueRows.map(row => ({
             title: String(row.title || '').substring(0, 500),
-            fullData: sanitizeRow(row.fullData)
+            fullDataJson: JSON.stringify(row.fullData)
           }));
 
           const sanitizedDatabase = {
             name: dbName,
             rows: sanitizedRows,
-            titleColumn: selectedColumn, // Keep original for display
-            allColumns: previewData.headers.map(h => String(h)), // Keep original names for display
+            titleColumn: selectedColumn,
+            allColumns: previewData.headers.map(h => String(h)),
             sampleTitles: uniqueRows.slice(0, 5).map(r => String(r.title || '')),
             uploadedAt: new Date().toISOString()
           };
           
-          console.log('Sanitized database ready, uploading...');
+          console.log('Database ready, uploading...');
           await dbRef.push(sanitizedDatabase);
           
           console.log('✓ Saved database to Firebase:', newDatabase.name);
@@ -589,7 +589,7 @@
             const matches = db.rows
               .map(row => ({
                 title: row.title,
-                fullData: row.fullData,
+                fullData: row.fullDataJson ? JSON.parse(row.fullDataJson) : (row.fullData || {}),
                 match: fuzzyMatch(searchQuery, row.title)
               }))
               .filter(item => item.match.score > 60)
@@ -672,6 +672,9 @@
                 letterSpacing: '0.5px'
               }}>
                 Cross-reference periodical titles against your library's database subscriptions
+              </p>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: '#636e72', marginTop: '0.5rem' }}>
+                v3 — {new Date().toLocaleDateString()}
               </p>
             </div>
           </div>
@@ -1169,14 +1172,11 @@
 
                   <div style={{ background: '#f8f7f5', borderRadius: '6px', padding: '1.5rem', border: '1px solid #e0ddd8' }}>
                     {selectedPeriodical.columns.map((column, idx) => {
-                      // Look up value using sanitized key (matching how data was stored)
-                      const sanitizedKey = String(column).replace(/[^a-zA-Z0-9_]/g, '_');
-                      const value = selectedPeriodical.fullData[sanitizedKey] || selectedPeriodical.fullData[column];
+                      const value = selectedPeriodical.fullData[column];
                       const displayValue = value === null || value === undefined || String(value).trim() === '' 
                         ? '(not provided)' 
                         : String(value);
-                      const sanitizedTitleCol = String(selectedPeriodical.titleColumn).replace(/[^a-zA-Z0-9_]/g, '_');
-                      const isTitle = sanitizedKey === sanitizedTitleCol;
+                      const isTitle = column === selectedPeriodical.titleColumn;
                       
                       return (
                         <div key={idx} style={{
