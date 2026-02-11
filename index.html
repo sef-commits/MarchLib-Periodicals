@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Periodical Checker</title>
+  
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  
+  <!-- Required libraries -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    #root {
+      width: 100%;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // ========================================
+    // FIREBASE CONFIGURATION
+    // ========================================
+    // REPLACE THIS WITH YOUR FIREBASE CONFIG
+    // Get this from: Firebase Console > Project Settings > Your apps > Firebase SDK snippet
+   const firebaseConfig = {
+  apiKey: "AIzaSyAvSPaF41uNVctGvoTKQzaIV8HUbzNSgC8",
+  authDomain: "periodical-checker.firebaseapp.com",
+  databaseURL: "https://periodical-checker-default-rtdb.firebaseio.com",
+  projectId: "periodical-checker",
+  storageBucket: "periodical-checker.firebasestorage.app",
+  messagingSenderId: "51074530120",
+  appId: "1:51074530120:web:5a8234cd98715e1179517d"
+};
+
+    // Initialize Firebase
+    let database;
+    try {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+      database = firebase.database();
+      console.log('✓ Firebase initialized successfully');
+    } catch (error) {
+      console.error('✗ Firebase initialization failed:', error);
+      alert('⚠️ Firebase not configured. Please add your Firebase configuration to the HTML file. See instructions in the README.');
+    }
+
+    const PeriodicalChecker = () => {
+      const [databases, setDatabases] = useState([]);
+      const [searchQuery, setSearchQuery] = useState('');
+      const [searchResults, setSearchResults] = useState(null);
+      const [isSearching, setIsSearching] = useState(false);
+      const [previewData, setPreviewData] = useState(null);
+      const [fileQueue, setFileQueue] = useState([]);
+      const [parseErrors, setParseErrors] = useState([]);
+      const [isLoadingStorage, setIsLoadingStorage] = useState(true);
+      const [selectedPeriodical, setSelectedPeriodical] = useState(null);
+      const fileInputRef = useRef(null);
+
+      // Load databases from Firebase on mount
+      useEffect(() => {
+        const loadDatabases = async () => {
+          try {
+            if (!database) {
+              console.error('Database not initialized');
+              setIsLoadingStorage(false);
+              return;
+            }
+
+            console.log('Loading databases from Firebase...');
+            const dbRef = database.ref('databases');
+            
+            dbRef.on('value', (snapshot) => {
+              const data = snapshot.val();
+              if (data) {
+                const loadedDbs = Object.keys(data).map(key => ({
+                  id: key,
+                  ...data[key]
+                }));
+                setDatabases(loadedDbs);
+                console.log(`Loaded ${loadedDbs.length} databases from Firebase`);
+              } else {
+                console.log('No databases found in Firebase');
+                setDatabases([]);
+              }
+              setIsLoadingStorage(false);
+            });
+          } catch (error) {
+            console.error('Error loading from Firebase:', error);
+            setIsLoadingStorage(false);
+          }
+        };
+
+        loadDatabases();
+      }, []);
+
+      // Handle file upload
+      const handleFileUpload = (event) => {
+        const files = Array.from(event.target.files);
+        setParseErrors([]);
+        setFileQueue(files);
+        if (files.length > 0) {
+          processNextFile(files);
+        }
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      };
+
+      // Process next file in queue
+      const processNextFile = (queue) => {
+        if (queue.length === 0) {
+          setFileQueue([]);
+          return;
+        }
+
+        const file = queue[0];
+        const fileExtension = file.name.split('.').pop().toLowerCase();
+        
+        if (fileExtension === 'csv') {
+          Papa.parse(file, {
+            header: false,
+            skipEmptyLines: false,
+            dynamicTyping: false,
+            delimiter: "",
+            complete: (results) => {
+              if (!results.data || results.data.length === 0) {
+                setParseErrors(prev => [...prev, { fileName: file.name, error: 'No data found in file' }]);
+                const newQueue = queue.slice(1);
+                setFileQueue(newQueue);
+                processNextFile(newQueue);
+                return;
+              }
+              
+              let headerRowIndex = -1;
+              for (let i = 0; i < Math.min(20, results.data.length); i++) {
+                const row = results.data[i];
+                if (!row || row.length === 0) continue;
+                const filledCells = row.filter(cell => cell !== null && cell !== undefined && String(cell).trim() !== '').length;
+                if (filledCells >= 2) {
+                  headerRowIndex = i;
+                  break;
+                }
+              }
+              
+              if (headerRowIndex === -1) {
+                setParseErrors(prev => [...prev, { fileName: file.name, error: 'Could not detect column headers' }]);
+                const newQueue = queue.slice(1);
+                setFileQueue(newQueue);
+                processNextFile(newQueue);
+                return;
+              }
+              
+              const headerRow = results.data[headerRowIndex];
+              const headers = headerRow.map((h, idx) => {
+                const header = String(h || '').trim();
+                return header || `Column_${idx + 1}`;
+              });
+              
+              const rawDataRows = results.data.slice(headerRowIndex + 1);
+              const dataRows = rawDataRows.map((row) => {
+                const rowObj = {};
+                headers.forEach((header, colIdx) => {
+                  rowObj[header] = row && row[colIdx] !== undefined && row[colIdx] !== null ? String(row[colIdx]).trim() : '';
+                });
+                return rowObj;
+              }).filter(row => Object.values(row).some(val => val !== ''));
+              
+              if (dataRows.length === 0) {
+                setParseErrors(prev => [...prev, { fileName: file.name, error: 'No data rows found after headers' }]);
+                const newQueue = queue.slice(1);
+                setFileQueue(newQueue);
+                processNextFile(newQueue);
+                return;
+              }
+              
+              const sampleRows = dataRows.slice(0, 5);
+              setPreviewData({
+                fileName: file.name,
+                headers: headers,
+                sampleRows: sampleRows,
+                allData: dataRows,
+                fileType: 'CSV',
+                remainingFiles: queue.length - 1,
+                parseInfo: { totalRows: dataRows.length, skippedRows: headerRowIndex }
+              });
+            },
+            error: (error) => {
+              setParseErrors(prev => [...prev, { fileName: file.name, error: error.message }]);
+              const newQueue = queue.slice(1);
+              setFileQueue(newQueue);
+              processNextFile(newQueue);
+            }
+          });
+        } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+          const reader = new FileReader();
+          
+          reader.onload = (e) => {
+            try {
+              const data = new Uint8Array(e.target.result);
+              let workbook;
+              try {
+                workbook = XLSX.read(data, { type: 'array', cellDates: false, cellStyles: false });
+              } catch (err) {
+                workbook = XLSX.read(data, { type: 'array' });
+              }
+              
+              const sheetsInfo = workbook.SheetNames.map(sheetName => {
+                const worksheet = workbook.Sheets[sheetName];
+                const cellAddresses = Object.keys(worksheet).filter(k => k[0] !== '!');
+                const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+                return {
+                  name: sheetName,
+                  rowCount: range.e.r + 1,
+                  colCount: range.e.c + 1,
+                  cellCount: cellAddresses.length,
+                  worksheet: worksheet
+                };
+              });
+              
+              const bestSheet = sheetsInfo.reduce((best, current) => 
+                current.cellCount > best.cellCount ? current : best
+              , sheetsInfo[0]);
+              
+              const firstSheetName = bestSheet.name;
+              const worksheet = bestSheet.worksheet;
+              const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+              
+              let jsonData = [];
+              
+              if (range.e.r < 1) {
+                if (bestSheet.cellCount > 50) {
+                  const allCells = Object.keys(worksheet).filter(k => k[0] !== '!').map(addr => ({
+                    addr: addr,
+                    decoded: XLSX.utils.decode_cell(addr)
+                  })).sort((a, b) => a.decoded.r - b.decoded.r || a.decoded.c - b.decoded.c);
+                  
+                  const maxRow = Math.max(...allCells.map(c => c.decoded.r));
+                  const maxCol = Math.max(...allCells.map(c => c.decoded.c));
+                  
+                  const forceData = [];
+                  for (let r = 0; r <= maxRow; r++) {
+                    const row = [];
+                    for (let c = 0; c <= maxCol; c++) {
+                      const addr = XLSX.utils.encode_cell({ r, c });
+                      const cell = worksheet[addr];
+                      row.push(cell ? (cell.v !== undefined ? String(cell.v) : '') : '');
+                    }
+                    forceData.push(row);
+                  }
+                  
+                  if (forceData.length > 1) {
+                    jsonData = forceData;
+                  } else {
+                    setParseErrors(prev => [...prev, { fileName: file.name, error: 'File appears empty' }]);
+                    const newQueue = queue.slice(1);
+                    setFileQueue(newQueue);
+                    processNextFile(newQueue);
+                    return;
+                  }
+                } else {
+                  setParseErrors(prev => [...prev, { fileName: file.name, error: 'File appears empty' }]);
+                  const newQueue = queue.slice(1);
+                  setFileQueue(newQueue);
+                  processNextFile(newQueue);
+                  return;
+                }
+              }
+              
+              if (jsonData.length === 0) {
+                jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false, blankrows: true });
+                
+                if (jsonData.length === 1 && bestSheet.cellCount > 50) {
+                  const allCells = Object.keys(worksheet).filter(k => k[0] !== '!').map(addr => ({
+                    addr: addr,
+                    decoded: XLSX.utils.decode_cell(addr)
+                  })).sort((a, b) => a.decoded.r - b.decoded.r || a.decoded.c - b.decoded.c);
+                  
+                  const maxRow = Math.max(...allCells.map(c => c.decoded.r));
+                  const maxCol = Math.max(...allCells.map(c => c.decoded.c));
+                  
+                  const forceData = [];
+                  for (let r = 0; r <= maxRow; r++) {
+                    const row = [];
+                    for (let c = 0; c <= maxCol; c++) {
+                      const addr = XLSX.utils.encode_cell({ r, c });
+                      const cell = worksheet[addr];
+                      row.push(cell ? (cell.v !== undefined ? String(cell.v) : '') : '');
+                    }
+                    forceData.push(row);
+                  }
+                  
+                  if (forceData.length > 1) {
+                    jsonData = forceData;
+                  }
+                }
+              }
+              
+              let headerRowIndex = -1;
+              for (let i = 0; i < Math.min(20, jsonData.length); i++) {
+                const row = jsonData[i];
+                if (!row || row.length === 0) continue;
+                const nonEmptyCells = row.filter(cell => cell !== null && cell !== undefined && String(cell).trim() !== '');
+                if (nonEmptyCells.length >= 2) {
+                  headerRowIndex = i;
+                  break;
+                }
+              }
+              
+              if (headerRowIndex === -1) {
+                setParseErrors(prev => [...prev, { fileName: file.name, error: 'Could not find header row' }]);
+                const newQueue = queue.slice(1);
+                setFileQueue(newQueue);
+                processNextFile(newQueue);
+                return;
+              }
+              
+              const headerRow = jsonData[headerRowIndex];
+              const headers = headerRow.map((h, idx) => {
+                const header = String(h || '').trim();
+                return header || `Column_${idx + 1}`;
+              });
+              
+              const rawDataRows = jsonData.slice(headerRowIndex + 1);
+              const mappedDataRows = rawDataRows.map((row) => {
+                const rowObj = {};
+                headers.forEach((header, colIdx) => {
+                  rowObj[header] = row && row[colIdx] !== undefined && row[colIdx] !== null ? String(row[colIdx]).trim() : '';
+                });
+                return rowObj;
+              });
+              
+              const dataRows = mappedDataRows.filter((row) => {
+                return Object.values(row).some(val => val !== '');
+              });
+              
+              if (dataRows.length === 0) {
+                setParseErrors(prev => [...prev, { fileName: file.name, error: 'No data rows found after headers' }]);
+                const newQueue = queue.slice(1);
+                setFileQueue(newQueue);
+                processNextFile(newQueue);
+                return;
+              }
+              
+              const sampleRows = dataRows.slice(0, 5);
+              setPreviewData({
+                fileName: file.name,
+                headers: headers,
+                sampleRows: sampleRows,
+                allData: dataRows,
+                fileType: 'Excel',
+                sheetName: firstSheetName,
+                totalSheets: workbook.SheetNames.length,
+                remainingFiles: queue.length - 1,
+                parseInfo: { totalRows: dataRows.length, skippedRows: headerRowIndex }
+              });
+            } catch (error) {
+              setParseErrors(prev => [...prev, { fileName: file.name, error: error.message }]);
+              const newQueue = queue.slice(1);
+              setFileQueue(newQueue);
+              processNextFile(newQueue);
+            }
+          };
+          
+          reader.onerror = () => {
+            setParseErrors(prev => [...prev, { fileName: file.name, error: 'Could not read file' }]);
+            const newQueue = queue.slice(1);
+            setFileQueue(newQueue);
+            processNextFile(newQueue);
+          };
+          
+          reader.readAsArrayBuffer(file);
+        } else {
+          setParseErrors(prev => [...prev, { fileName: file.name, error: 'Unsupported file type' }]);
+          const newQueue = queue.slice(1);
+          setFileQueue(newQueue);
+          processNextFile(newQueue);
+        }
+      };
+
+      // Sanitize data for Firebase (remove undefined, functions, etc.)
+      const sanitizeForFirebase = (obj) => {
+        if (obj === null) return null;
+        if (obj === undefined) return '';
+        if (typeof obj === 'function') return '';
+        if (typeof obj === 'string' || typeof obj === 'number' || typeof obj === 'boolean') {
+          return obj;
+        }
+        if (Array.isArray(obj)) {
+          return obj.map(item => sanitizeForFirebase(item));
+        }
+        if (typeof obj === 'object') {
+          const sanitized = {};
+          for (const key in obj) {
+            if (obj.hasOwnProperty(key)) {
+              const sanitizedKey = String(key).replace(/[.#$[\]()/ ]/g, '_'); // Firebase doesn't allow these chars in keys
+              sanitized[sanitizedKey] = sanitizeForFirebase(obj[key]);
+            }
+          }
+          return sanitized;
+        }
+        return String(obj);
+      };
+
+      // Confirm column selection and save to Firebase
+      const confirmColumnSelection = async (selectedColumn) => {
+        if (!previewData) return;
+        
+        console.log('Processing column:', selectedColumn);
+        console.log('Total rows to process:', previewData.allData.length);
+        
+        const rows = previewData.allData
+          .map((row, idx) => {
+            const title = row[selectedColumn];
+            if (!title || String(title).trim() === '') return null;
+            
+            // Sanitize the full data row
+            const sanitizedRow = {};
+            for (const key in row) {
+              if (row.hasOwnProperty(key)) {
+                const value = row[key];
+                sanitizedRow[key] = (value === null || value === undefined) ? '' : String(value).trim();
+              }
+            }
+            
+            return {
+              title: String(title).trim(),
+              fullData: sanitizedRow
+            };
+          })
+          .filter(item => item !== null);
+
+        console.log('Rows after filtering:', rows.length);
+
+        const uniqueRows = [];
+        const seenTitles = new Set();
+        for (const row of rows) {
+          if (!seenTitles.has(row.title)) {
+            seenTitles.add(row.title);
+            uniqueRows.push(row);
+          }
+        }
+
+        console.log('Unique rows:', uniqueRows.length);
+
+        const dbName = previewData.fileName.replace(/\.(csv|xlsx|xls)$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+        
+        const newDatabase = {
+          name: dbName,
+          rows: uniqueRows,
+          titleColumn: selectedColumn,
+          allColumns: previewData.headers.map(h => String(h)),
+          sampleTitles: uniqueRows.slice(0, 5).map(r => r.title),
+          uploadedAt: new Date().toISOString()
+        };
+
+        console.log('Database object created:', {
+          name: newDatabase.name,
+          rowCount: newDatabase.rows.length,
+          columns: newDatabase.allColumns.length
+        });
+
+        // Save to Firebase
+        try {
+          if (!database) {
+            throw new Error('Firebase database not initialized');
+          }
+          
+          console.log('Starting Firebase upload...');
+          const dbRef = database.ref('databases');
+          
+          // Sanitize the entire database object before uploading
+          const sanitizedDatabase = sanitizeForFirebase(newDatabase);
+          
+          console.log('Sanitized database ready, uploading...');
+          await dbRef.push(sanitizedDatabase);
+          
+          console.log('✓ Saved database to Firebase:', newDatabase.name);
+        } catch (error) {
+          console.error('✗ Error saving to Firebase:', error);
+          console.error('Error details:', {
+            message: error.message,
+            code: error.code,
+            stack: error.stack
+          });
+          alert('Error saving database: ' + (error.message || 'Unknown error') + '\n\nCheck console (F12) for details.');
+          
+          // Don't proceed to next file on error
+          return;
+        }
+        
+        const newQueue = fileQueue.slice(1);
+        setFileQueue(newQueue);
+        setPreviewData(null);
+        
+        if (newQueue.length > 0) {
+          processNextFile(newQueue);
+        }
+      };
+
+      const skipCurrentFile = () => {
+        const newQueue = fileQueue.slice(1);
+        setFileQueue(newQueue);
+        setPreviewData(null);
+        if (newQueue.length > 0) {
+          processNextFile(newQueue);
+        }
+      };
+
+      // Fuzzy matching
+      const fuzzyMatch = (query, target) => {
+        if (!query || !target) return { score: 0, type: 'none' };
+        
+        const q = String(query).toLowerCase().trim();
+        const t = String(target).toLowerCase().trim();
+        
+        if (!q || !t) return { score: 0, type: 'none' };
+        if (t === q) return { score: 100, type: 'exact' };
+        if (t.includes(q)) return { score: 95, type: 'contains' };
+        
+        const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'in', 'on', 'at', 'to', 'for', 'from', 'by', 'with', 'about', 'as', 'is', 'it']);
+        
+        const qWords = q.split(/\s+/).filter(w => w.length > 0);
+        const tWords = t.split(/\s+/).filter(w => w.length > 0);
+        const qSignificantWords = qWords.filter(w => !stopWords.has(w) && w.length >= 4);
+        const tSignificantWords = tWords.filter(w => !stopWords.has(w) && w.length >= 4);
+        
+        if (qSignificantWords.length === 0) return { score: 0, type: 'none' };
+        
+        const matchedWords = qSignificantWords.filter(qw => {
+          return tSignificantWords.some(tw => {
+            if (qw === tw) return true;
+            const shorter = qw.length < tw.length ? qw : tw;
+            const longer = qw.length >= tw.length ? qw : tw;
+            if (shorter.length >= 5 && longer.startsWith(shorter)) return true;
+            const maxLen = Math.max(qw.length, tw.length);
+            let matchCount = 0;
+            for (let i = 0; i < Math.min(qw.length, tw.length); i++) {
+              if (qw[i] === tw[i]) matchCount++;
+            }
+            return (matchCount / maxLen) >= 0.8;
+          });
+        }).length;
+        
+        if (matchedWords === 0) return { score: 0, type: 'none' };
+        
+        const matchRatio = matchedWords / qSignificantWords.length;
+        if (matchRatio < 0.7) return { score: 0, type: 'none' };
+        
+        const score = matchRatio * 85;
+        if (matchedWords === qSignificantWords.length) {
+          return { score: Math.min(90, score + 5), type: 'partial' };
+        }
+        
+        return { score: score, type: 'partial' };
+      };
+
+      // Search
+      const handleSearch = () => {
+        if (!searchQuery.trim() || databases.length === 0) return;
+        setIsSearching(true);
+        
+        setTimeout(() => {
+          const results = databases.map(db => {
+            const matches = db.rows
+              .map(row => ({
+                title: row.title,
+                fullData: row.fullData,
+                match: fuzzyMatch(searchQuery, row.title)
+              }))
+              .filter(item => item.match.score > 60)
+              .sort((a, b) => b.match.score - a.match.score)
+              .slice(0, 5);
+            
+            return {
+              database: db.name,
+              databaseColumns: db.allColumns,
+              titleColumn: db.titleColumn,
+              databaseId: db.id,
+              matches: matches,
+              hasMatch: matches.length > 0,
+              bestScore: matches[0]?.match.score || 0
+            };
+          }).sort((a, b) => b.bestScore - a.bestScore);
+          
+          setSearchResults(results);
+          setIsSearching(false);
+        }, 300);
+      };
+
+      // Clear database
+      const clearDatabase = async (dbId) => {
+        if (!database) return;
+        try {
+          await database.ref(`databases/${dbId}`).remove();
+          console.log('✓ Deleted database from Firebase');
+        } catch (error) {
+          console.error('✗ Error deleting from Firebase:', error);
+        }
+      };
+
+      // Clear all databases
+      const clearAllDatabases = async () => {
+        if (!confirm('Are you sure you want to remove all databases? This will affect all team members!')) {
+          return;
+        }
+        
+        if (!database) return;
+        try {
+          await database.ref('databases').remove();
+          console.log('✓ Cleared all databases from Firebase');
+        } catch (error) {
+          console.error('✗ Error clearing Firebase:', error);
+          alert('Error clearing databases: ' + error.message);
+        }
+      };
+
+      return (
+        <div style={{
+          minHeight: '100vh',
+          background: 'linear-gradient(135deg, #f5f3f0 0%, #e8e4df 100%)',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+        }}>
+          {/* Header */}
+          <div style={{
+            background: 'linear-gradient(135deg, #2d3436 0%, #434a4d 100%)',
+            padding: '3rem 2rem',
+            borderBottom: '4px solid #d4af37'
+          }}>
+            <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+              <h1 style={{
+                margin: 0,
+                fontSize: '3rem',
+                fontWeight: 300,
+                color: '#f5f3f0',
+                fontFamily: 'Georgia, "Times New Roman", serif',
+                letterSpacing: '2px',
+                textTransform: 'uppercase',
+                marginBottom: '0.5rem'
+              }}>
+                Periodical Checker
+              </h1>
+              <p style={{
+                margin: 0,
+                fontSize: '1.1rem',
+                color: '#d4af37',
+                fontWeight: 300,
+                letterSpacing: '0.5px'
+              }}>
+                Cross-reference periodical titles against your library's database subscriptions
+              </p>
+            </div>
+          </div>
+
+          <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '3rem 2rem' }}>
+            
+            {/* Upload Section */}
+            <div style={{
+              background: 'white',
+              borderRadius: '8px',
+              padding: '2.5rem',
+              marginBottom: '2rem',
+              boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
+              border: '1px solid #e0ddd8'
+            }}>
+              <h2 style={{
+                margin: '0 0 1.5rem 0',
+                fontSize: '1.5rem',
+                fontFamily: 'Georgia, serif',
+                color: '#2d3436',
+                fontWeight: 400,
+                borderBottom: '2px solid #d4af37',
+                paddingBottom: '0.75rem',
+                display: 'inline-block'
+              }}>
+                1. Upload Database Title Lists
+              </h2>
+              
+              <p style={{
+                color: '#636e72',
+                marginBottom: '1.5rem',
+                lineHeight: 1.6
+              }}>
+                Upload CSV or Excel files (.xlsx, .xls) containing periodical titles from each database you subscribe to.
+                <br />
+                <strong style={{ color: '#00b894', marginTop: '0.5rem', display: 'inline-block' }}>
+                  ☁️ Databases are shared with your team - everyone sees the same uploads!
+                </strong>
+              </p>
+              
+              <label style={{
+                display: 'inline-block',
+                padding: '1rem 2rem',
+                background: 'linear-gradient(135deg, #2d3436 0%, #434a4d 100%)',
+                color: 'white',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '1rem',
+                fontWeight: 500,
+                border: '2px solid #d4af37'
+              }}>
+                <input
+                  type="file"
+                  multiple
+                  accept=".csv,.xlsx,.xls"
+                  onChange={handleFileUpload}
+                  ref={fileInputRef}
+                  style={{ display: 'none' }}
+                />
+                📁 Select Database Files
+              </label>
+
+              {parseErrors.length > 0 && (
+                <div style={{ marginTop: '2rem', background: '#fff5f5', border: '2px solid #d63031', borderRadius: '6px', padding: '1.5rem' }}>
+                  <h3 style={{ margin: '0 0 1rem 0', color: '#d63031', fontSize: '0.85rem', textTransform: 'uppercase' }}>
+                    ⚠️ File Parsing Errors ({parseErrors.length})
+                  </h3>
+                  {parseErrors.map((error, index) => (
+                    <div key={index} style={{ padding: '0.75rem', background: 'white', borderRadius: '4px', marginBottom: '0.5rem' }}>
+                      <div style={{ fontWeight: 600, color: '#2d3436' }}>{error.fileName}</div>
+                      <div style={{ fontSize: '0.85rem', color: '#636e72' }}>{error.error}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {databases.length > 0 && (
+                <div style={{ marginTop: '2rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h3 style={{ margin: 0, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>
+                      Loaded Databases ({databases.length})
+                    </h3>
+                    <button onClick={clearAllDatabases} style={{
+                      padding: '0.5rem 1rem',
+                      background: 'transparent',
+                      border: '1px solid #d63031',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      color: '#d63031'
+                    }}>
+                      Clear All Data
+                    </button>
+                  </div>
+                  {databases.map((db) => (
+                    <div key={db.id} style={{
+                      padding: '1.25rem',
+                      background: '#f8f7f5',
+                      borderRadius: '6px',
+                      border: '1px solid #e8e4df',
+                      marginBottom: '0.75rem'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <div>
+                          <div style={{ fontWeight: 600, color: '#2d3436' }}>{db.name}</div>
+                          <div style={{ fontSize: '0.85rem', color: '#636e72' }}>
+                            {db.rows.length.toLocaleString()} titles
+                          </div>
+                        </div>
+                        <button onClick={() => clearDatabase(db.id)} style={{
+                          padding: '0.5rem 1rem',
+                          background: 'transparent',
+                          border: '1px solid #dfe6e9',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '0.9rem',
+                          color: '#636e72'
+                        }}>
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Search Section */}
+            {databases.length > 0 && (
+              <div style={{
+                background: 'white',
+                borderRadius: '8px',
+                padding: '2.5rem',
+                marginBottom: '2rem',
+                boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
+                border: '1px solid #e0ddd8'
+              }}>
+                <h2 style={{
+                  margin: '0 0 1.5rem 0',
+                  fontSize: '1.5rem',
+                  fontFamily: 'Georgia, serif',
+                  color: '#2d3436',
+                  fontWeight: 400,
+                  borderBottom: '2px solid #d4af37',
+                  paddingBottom: '0.75rem',
+                  display: 'inline-block'
+                }}>
+                  2. Search for a Periodical
+                </h2>
+                
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                    placeholder="Enter periodical title (e.g., economist)"
+                    style={{
+                      flex: 1,
+                      padding: '1rem 1.5rem',
+                      fontSize: '1rem',
+                      border: '2px solid #e0ddd8',
+                      borderRadius: '6px',
+                      outline: 'none'
+                    }}
+                  />
+                  <button
+                    onClick={handleSearch}
+                    disabled={!searchQuery.trim() || isSearching}
+                    style={{
+                      padding: '1rem 2.5rem',
+                      background: searchQuery.trim() ? 'linear-gradient(135deg, #d4af37 0%, #f4d03f 100%)' : '#dfe6e9',
+                      color: searchQuery.trim() ? '#2d3436' : '#636e72',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '0.9rem',
+                      fontWeight: 600,
+                      cursor: searchQuery.trim() ? 'pointer' : 'not-allowed'
+                    }}
+                  >
+                    {isSearching ? 'Searching...' : 'Search'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Results */}
+            {searchResults && (
+              <div style={{
+                background: 'white',
+                borderRadius: '8px',
+                padding: '2.5rem',
+                boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
+                border: '1px solid #e0ddd8'
+              }}>
+                <h2 style={{
+                  margin: '0 0 1.5rem 0',
+                  fontSize: '1.5rem',
+                  fontFamily: 'Georgia, serif',
+                  color: '#2d3436',
+                  fontWeight: 400,
+                  borderBottom: '2px solid #d4af37',
+                  paddingBottom: '0.75rem',
+                  display: 'inline-block'
+                }}>
+                  Search Results
+                </h2>
+                
+                <div style={{
+                  background: '#f8f7f5',
+                  padding: '1rem 1.5rem',
+                  borderRadius: '6px',
+                  marginBottom: '2rem',
+                  borderLeft: '4px solid #d4af37'
+                }}>
+                  <div style={{ fontWeight: 600, color: '#2d3436' }}>Searching for: "{searchQuery}"</div>
+                  <div style={{ fontSize: '0.9rem', color: '#636e72' }}>
+                    {searchResults.filter(r => r.hasMatch).length} of {searchResults.length} databases contain matches
+                  </div>
+                </div>
+
+                {searchResults.map((result, index) => (
+                  <div key={index} style={{
+                    padding: '1.5rem',
+                    background: result.hasMatch ? '#f1f8f4' : '#fafafa',
+                    borderRadius: '6px',
+                    border: result.hasMatch ? '2px solid #00b894' : '1px solid #e0ddd8',
+                    marginBottom: '1.5rem'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: result.hasMatch ? '1rem' : 0 }}>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: '#2d3436' }}>
+                          {result.database}
+                        </h3>
+                        <div style={{ fontSize: '0.9rem', color: result.hasMatch ? '#00b894' : '#636e72', fontWeight: 500 }}>
+                          {result.hasMatch ? `✓ ${result.matches.length} match${result.matches.length > 1 ? 'es' : ''} found` : '✗ No matches found'}
+                        </div>
+                      </div>
+                      {result.hasMatch && (
+                        <div style={{
+                          padding: '0.5rem 1rem',
+                          background: '#00b894',
+                          color: 'white',
+                          borderRadius: '20px',
+                          fontSize: '0.85rem',
+                          fontWeight: 600
+                        }}>
+                          {Math.round(result.bestScore)}% match
+                        </div>
+                      )}
+                    </div>
+
+                    {result.hasMatch && (
+                      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #d5f4e6' }}>
+                        {result.matches.map((match, mIndex) => (
+                          <div
+                            key={mIndex}
+                            onClick={() => setSelectedPeriodical({
+                              title: match.title,
+                              fullData: match.fullData,
+                              database: result.database,
+                              columns: result.databaseColumns,
+                              titleColumn: result.titleColumn
+                            })}
+                            style={{
+                              padding: '0.75rem',
+                              background: 'white',
+                              borderRadius: '4px',
+                              marginBottom: mIndex < result.matches.length - 1 ? '0.5rem' : 0,
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              cursor: 'pointer',
+                              border: '1px solid transparent'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.border = '1px solid #d4af37';
+                              e.currentTarget.style.background = '#fffef8';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.border = '1px solid transparent';
+                              e.currentTarget.style.background = 'white';
+                            }}
+                          >
+                            <div style={{ flex: 1, fontSize: '0.95rem', color: '#2d3436', fontWeight: 500 }}>
+                              {match.title}
+                              <span style={{ marginLeft: '0.5rem', fontSize: '0.8rem', color: '#636e72', fontWeight: 400 }}>
+                                → Click for details
+                              </span>
+                            </div>
+                            <div style={{
+                              fontSize: '0.8rem',
+                              color: '#00b894',
+                              fontWeight: 600,
+                              marginLeft: '1rem',
+                              padding: '0.25rem 0.75rem',
+                              background: '#d5f4e6',
+                              borderRadius: '12px'
+                            }}>
+                              {Math.round(match.match.score)}%
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Loading */}
+            {isLoadingStorage && (
+              <div style={{ background: 'white', borderRadius: '8px', padding: '3rem', textAlign: 'center' }}>
+                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⏳</div>
+                <h3 style={{ margin: 0, fontSize: '1.5rem', color: '#2d3436' }}>Loading Databases...</h3>
+              </div>
+            )}
+
+            {/* Get Started */}
+            {!isLoadingStorage && databases.length === 0 && (
+              <div style={{ background: 'white', borderRadius: '8px', padding: '3rem', textAlign: 'center' }}>
+                <div style={{ fontSize: '4rem', marginBottom: '1rem', opacity: 0.3 }}>📚</div>
+                <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.5rem', color: '#2d3436' }}>Get Started</h3>
+                <p style={{ color: '#636e72', fontSize: '1.1rem', maxWidth: '600px', margin: '0 auto' }}>
+                  Upload CSV or Excel files containing periodical titles from your library's database subscriptions.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Preview Modal */}
+          {previewData && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.7)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              padding: '2rem'
+            }}>
+              <div style={{
+                background: 'white',
+                borderRadius: '8px',
+                maxWidth: '900px',
+                width: '100%',
+                maxHeight: '80vh',
+                overflow: 'auto'
+              }}>
+                <div style={{ padding: '2rem', borderBottom: '2px solid #e0ddd8', background: '#f8f7f5' }}>
+                  <h2 style={{ margin: 0, fontSize: '1.5rem', fontFamily: 'Georgia, serif', color: '#2d3436' }}>
+                    Preview: {previewData.fileName}
+                  </h2>
+                  <p style={{ margin: '0.5rem 0 0 0', color: '#636e72', fontSize: '0.95rem' }}>
+                    Select the column that contains periodical titles
+                  </p>
+                </div>
+
+                <div style={{ padding: '2rem' }}>
+                  {previewData.headers.map((header, idx) => {
+                    const sampleData = previewData.sampleRows.map(row => row[header]);
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => confirmColumnSelection(header)}
+                        style={{
+                          padding: '1rem',
+                          background: '#f8f7f5',
+                          borderRadius: '6px',
+                          border: '2px solid #e0ddd8',
+                          cursor: 'pointer',
+                          marginBottom: '1rem'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = '#d4af37';
+                          e.currentTarget.style.background = '#fffef8';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = '#e0ddd8';
+                          e.currentTarget.style.background = '#f8f7f5';
+                        }}
+                      >
+                        <div style={{ fontWeight: 600, color: '#2d3436', marginBottom: '0.75rem' }}>
+                          {header}
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: '#636e72', marginBottom: '0.5rem' }}>
+                          Sample values:
+                        </div>
+                        {sampleData.slice(0, 3).map((val, i) => {
+                          const displayVal = val === null || val === undefined ? '(empty)' 
+                            : String(val).trim() === '' ? '(blank)' 
+                            : String(val);
+                          return (
+                            <div key={i} style={{
+                              padding: '0.5rem',
+                              background: 'white',
+                              borderRadius: '4px',
+                              fontFamily: 'monospace',
+                              fontSize: '0.85rem',
+                              marginBottom: '0.25rem',
+                              color: displayVal.startsWith('(') ? '#95a5a6' : '#2d3436'
+                            }}>
+                              {displayVal.substring(0, 100)}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{
+                  padding: '1.5rem 2rem',
+                  borderTop: '1px solid #e0ddd8',
+                  background: '#f8f7f5',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: '1rem'
+                }}>
+                  <button onClick={skipCurrentFile} style={{
+                    padding: '0.75rem 1.5rem',
+                    background: 'transparent',
+                    color: '#636e72',
+                    border: '1px solid #dfe6e9',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '1rem'
+                  }}>
+                    Skip
+                  </button>
+                  <button onClick={() => { setPreviewData(null); setFileQueue([]); }} style={{
+                    padding: '0.75rem 2rem',
+                    background: '#636e72',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '1rem'
+                  }}>
+                    Cancel All
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Detail Modal */}
+          {selectedPeriodical && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.7)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              padding: '2rem'
+            }}
+            onClick={() => setSelectedPeriodical(null)}
+            >
+              <div style={{
+                background: 'white',
+                borderRadius: '8px',
+                maxWidth: '800px',
+                width: '100%',
+                maxHeight: '80vh',
+                overflow: 'auto'
+              }}
+              onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{
+                  padding: '2rem',
+                  borderBottom: '2px solid #e0ddd8',
+                  background: 'linear-gradient(135deg, #2d3436 0%, #434a4d 100%)',
+                  color: 'white'
+                }}>
+                  <h2 style={{ margin: 0, fontSize: '1.5rem', fontFamily: 'Georgia, serif' }}>
+                    {selectedPeriodical.title}
+                  </h2>
+                  <div style={{ fontSize: '0.9rem', color: '#d4af37', marginTop: '0.5rem' }}>
+                    From: {selectedPeriodical.database}
+                  </div>
+                </div>
+
+                <div style={{ padding: '2rem' }}>
+                  <h3 style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                    📊 Complete Database Record
+                  </h3>
+
+                  <div style={{ background: '#f8f7f5', borderRadius: '6px', padding: '1.5rem', border: '1px solid #e0ddd8' }}>
+                    {selectedPeriodical.columns.map((column, idx) => {
+                      const value = selectedPeriodical.fullData[column];
+                      const displayValue = value === null || value === undefined || String(value).trim() === '' 
+                        ? '(not provided)' 
+                        : String(value);
+                      const isTitle = column === selectedPeriodical.titleColumn;
+                      
+                      return (
+                        <div key={idx} style={{
+                          marginBottom: idx < selectedPeriodical.columns.length - 1 ? '1rem' : 0,
+                          paddingBottom: idx < selectedPeriodical.columns.length - 1 ? '1rem' : 0,
+                          borderBottom: idx < selectedPeriodical.columns.length - 1 ? '1px solid #e8e4df' : 'none'
+                        }}>
+                          <div style={{
+                            fontSize: '0.75rem',
+                            color: '#636e72',
+                            textTransform: 'uppercase',
+                            marginBottom: '0.25rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem'
+                          }}>
+                            {column}
+                            {isTitle && (
+                              <span style={{
+                                background: '#d4af37',
+                                color: 'white',
+                                padding: '0.1rem 0.4rem',
+                                borderRadius: '3px',
+                                fontSize: '0.65rem'
+                              }}>
+                                TITLE
+                              </span>
+                            )}
+                          </div>
+                          <div style={{
+                            fontSize: '0.95rem',
+                            color: displayValue === '(not provided)' ? '#95a5a6' : '#2d3436',
+                            fontWeight: isTitle ? 600 : 400,
+                            fontStyle: displayValue === '(not provided)' ? 'italic' : 'normal'
+                          }}>
+                            {displayValue}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{
+                    marginTop: '1.5rem',
+                    padding: '1rem',
+                    background: '#fff9e6',
+                    border: '1px solid #f4d03f',
+                    borderRadius: '6px',
+                    fontSize: '0.85rem',
+                    color: '#636e72'
+                  }}>
+                    <strong style={{ color: '#2d3436' }}>💡 Tip:</strong> Look for fields like "date_first_issue_online", 
+                    "date_last_issue_online", "coverage_depth", or "access_type" to find coverage details.
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: '1.5rem 2rem',
+                  borderTop: '1px solid #e0ddd8',
+                  background: '#f8f7f5',
+                  display: 'flex',
+                  justifyContent: 'flex-end'
+                }}>
+                  <button onClick={() => setSelectedPeriodical(null)} style={{
+                    padding: '0.75rem 2rem',
+                    background: 'linear-gradient(135deg, #2d3436 0%, #434a4d 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '1rem'
+                  }}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    ReactDOM.render(<PeriodicalChecker />, document.getElementById('root'));
+  </script>
+</body>
+</html>
