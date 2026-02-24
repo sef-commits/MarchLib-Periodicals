@@ -35,6 +35,28 @@
     const { useState, useEffect, useRef } = React;
 
     // ========================================
+    // DATABASE DISPLAY NAME MAPPING
+    // ========================================
+    const DB_DISPLAY_NAMES = {
+      'Gale_Global_BIC':               'Gale in Context: Biography',
+      'Gale_Global_GIC':               'Gale in Context: Global Issues',
+      'Gale_Global_WHIC':              'Gale in Context: World History',
+      'Gale_Global_LRC':               'Gale Literature Resource Center',
+      'ProQuest_Title_List':           'ProQuest Global Newstream & Historical Newspapers',
+      'secschool-backfile-collection': 'JSTOR',
+      'AWN_titles':                    'Access World News',
+      'sch-coverage':                  'EBSCO Science Reference Center',
+    };
+
+    const getDisplayName = (rawName) => {
+      if (DB_DISPLAY_NAMES[rawName]) return DB_DISPLAY_NAMES[rawName];
+      for (const [key, displayName] of Object.entries(DB_DISPLAY_NAMES)) {
+        if (rawName.startsWith(key)) return displayName;
+      }
+      return rawName.replace(/_/g, ' ');
+    };
+
+    // ========================================
     // FIREBASE CONFIGURATION
     // ========================================
     // REPLACE THIS WITH YOUR FIREBASE CONFIG
@@ -540,7 +562,7 @@
               .slice(0, 5);
             
             return {
-              database: db.name,
+              database: getDisplayName(db.name),
               databaseColumns: db.columns || db.allColumns || [],
               titleColumn: db.titleColumn,
               titleColIndex: db.titleColIndex,
@@ -721,7 +743,7 @@
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <div>
-                          <div style={{ fontWeight: 600, color: '#2d3436' }}>{db.name}</div>
+                          <div style={{ fontWeight: 600, color: '#2d3436' }}>{getDisplayName(db.name)}</div>
                           <div style={{ fontSize: '0.85rem', color: '#636e72' }}>
                             {db.rows.length.toLocaleString()} titles
                           </div>
