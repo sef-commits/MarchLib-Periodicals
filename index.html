@@ -647,6 +647,65 @@
 
           <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '3rem 2rem' }}>
             
+            {/* Search Section */}
+            {databases.length > 0 && (
+              <div style={{
+                background: 'white',
+                borderRadius: '8px',
+                padding: '2.5rem',
+                marginBottom: '2rem',
+                boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
+                border: '1px solid #e0ddd8'
+              }}>
+                <h2 style={{
+                  margin: '0 0 1.5rem 0',
+                  fontSize: '1.5rem',
+                  fontFamily: 'Georgia, serif',
+                  color: '#2d3436',
+                  fontWeight: 400,
+                  borderBottom: '2px solid #54565b',
+                  paddingBottom: '0.75rem',
+                  display: 'inline-block'
+                }}>
+                  1. Search for a Periodical
+                </h2>
+                
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                    placeholder="Enter periodical title (e.g., economist)"
+                    style={{
+                      flex: 1,
+                      padding: '1rem 1.5rem',
+                      fontSize: '1rem',
+                      border: '2px solid #e0ddd8',
+                      borderRadius: '6px',
+                      outline: 'none'
+                    }}
+                  />
+                  <button
+                    onClick={handleSearch}
+                    disabled={!searchQuery.trim() || isSearching}
+                    style={{
+                      padding: '1rem 2.5rem',
+                      background: searchQuery.trim() ? '#a0a0a0' : '#d0d0d0',
+color: searchQuery.trim() ? '#ffffff' : '#888888',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '0.9rem',
+                      fontWeight: 600,
+                      cursor: searchQuery.trim() ? 'pointer' : 'not-allowed'
+                    }}
+                  >
+                    {isSearching ? 'Searching...' : 'Search'}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Upload Section */}
             <div style={{
               background: 'white',
@@ -666,7 +725,7 @@
                 paddingBottom: '0.75rem',
                 display: 'inline-block'
               }}>
-                1. Upload Database Title Lists
+                2. Upload Database Title Lists
               </h2>
               
               <p style={{
@@ -765,65 +824,6 @@
                 </div>
               )}
             </div>
-
-            {/* Search Section */}
-            {databases.length > 0 && (
-              <div style={{
-                background: 'white',
-                borderRadius: '8px',
-                padding: '2.5rem',
-                marginBottom: '2rem',
-                boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
-                border: '1px solid #e0ddd8'
-              }}>
-                <h2 style={{
-                  margin: '0 0 1.5rem 0',
-                  fontSize: '1.5rem',
-                  fontFamily: 'Georgia, serif',
-                  color: '#2d3436',
-                  fontWeight: 400,
-                  borderBottom: '2px solid #54565b',
-                  paddingBottom: '0.75rem',
-                  display: 'inline-block'
-                }}>
-                  2. Search for a Periodical
-                </h2>
-                
-                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                    placeholder="Enter periodical title (e.g., economist)"
-                    style={{
-                      flex: 1,
-                      padding: '1rem 1.5rem',
-                      fontSize: '1rem',
-                      border: '2px solid #e0ddd8',
-                      borderRadius: '6px',
-                      outline: 'none'
-                    }}
-                  />
-                  <button
-                    onClick={handleSearch}
-                    disabled={!searchQuery.trim() || isSearching}
-                    style={{
-                      padding: '1rem 2.5rem',
-                      background: searchQuery.trim() ? '#a0a0a0' : '#d0d0d0',
-color: searchQuery.trim() ? '#ffffff' : '#888888',
-                      border: 'none',
-                      borderRadius: '6px',
-                      fontSize: '0.9rem',
-                      fontWeight: 600,
-                      cursor: searchQuery.trim() ? 'pointer' : 'not-allowed'
-                    }}
-                  >
-                    {isSearching ? 'Searching...' : 'Search'}
-                  </button>
-                </div>
-              </div>
-            )}
 
             {/* Results */}
             {searchResults && (
