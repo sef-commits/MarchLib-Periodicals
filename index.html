@@ -94,7 +94,17 @@
       const [parseErrors, setParseErrors] = useState([]);
       const [isLoadingStorage, setIsLoadingStorage] = useState(true);
       const [selectedPeriodical, setSelectedPeriodical] = useState(null);
+      const [pendingDisplayName, setPendingDisplayName] = useState('');
       const fileInputRef = useRef(null);
+
+      useEffect(() => {
+        if (previewData) {
+          const rawName = previewData.fileName
+            .replace(/\.(csv|xlsx|xls)$/i, '')
+            .replace(/[^a-zA-Z0-9_-]/g, '_');
+          setPendingDisplayName(getDisplayName(rawName));
+        }
+      }, [previewData]);
 
       // Load databases from Firebase on mount
       useEffect(() => {
@@ -458,6 +468,7 @@
 
         const dbToSave = {
           name: dbName,
+          displayName: pendingDisplayName.trim() || getDisplayName(dbName),
           rows: uniqueRows,
           columns: columns,
           titleColIndex: titleColIndex,
@@ -562,7 +573,7 @@
               .slice(0, 5);
             
             return {
-              database: getDisplayName(db.name),
+              database: db.displayName || getDisplayName(db.name),
               databaseColumns: db.columns || db.allColumns || [],
               titleColumn: db.titleColumn,
               titleColIndex: db.titleColIndex,
@@ -964,7 +975,7 @@ color: searchQuery.trim() ? '#ffffff' : '#888888',
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <div>
-                          <div style={{ fontWeight: 600, color: '#2d3436' }}>{getDisplayName(db.name)}</div>
+                          <div style={{ fontWeight: 600, color: '#2d3436' }}>{db.displayName || getDisplayName(db.name)}</div>
                           <div style={{ fontSize: '0.85rem', color: '#636e72' }}>
                             {db.rows.length.toLocaleString()} titles
                           </div>
@@ -1034,9 +1045,28 @@ color: searchQuery.trim() ? '#ffffff' : '#888888',
                   <h2 style={{ margin: 0, fontSize: '1.5rem', fontFamily: 'Georgia, serif', color: '#2d3436' }}>
                     Preview: {previewData.fileName}
                   </h2>
-                  <p style={{ margin: '0.5rem 0 0 0', color: '#636e72', fontSize: '0.95rem' }}>
+                  <p style={{ margin: '0.5rem 0 0.75rem 0', color: '#636e72', fontSize: '0.95rem' }}>
                     Select the column that contains periodical titles
                   </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <label style={{ fontSize: '0.9rem', fontWeight: 600, color: '#2d3436', whiteSpace: 'nowrap' }}>
+                      Display name:
+                    </label>
+                    <input
+                      type="text"
+                      value={pendingDisplayName}
+                      onChange={(e) => setPendingDisplayName(e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: '0.5rem 0.75rem',
+                        fontSize: '0.95rem',
+                        border: '1px solid #c0bdb8',
+                        borderRadius: '4px',
+                        outline: 'none',
+                        background: 'white'
+                      }}
+                    />
+                  </div>
                 </div>
 
                 <div style={{ padding: '2rem' }}>
