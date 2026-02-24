@@ -706,125 +706,6 @@ color: searchQuery.trim() ? '#ffffff' : '#888888',
               </div>
             )}
 
-            {/* Upload Section */}
-            <div style={{
-              background: 'white',
-              borderRadius: '8px',
-              padding: '2.5rem',
-              marginBottom: '2rem',
-              boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
-              border: '1px solid #e0ddd8'
-            }}>
-              <h2 style={{
-                margin: '0 0 1.5rem 0',
-                fontSize: '1.5rem',
-                fontFamily: 'Georgia, serif',
-                color: '#2d3436',
-                fontWeight: 400,
-                borderBottom: '2px solid #54565b',
-                paddingBottom: '0.75rem',
-                display: 'inline-block'
-              }}>
-                2. Upload Database Title Lists
-              </h2>
-              
-              <p style={{
-                color: '#54565b',
-                marginBottom: '1.5rem',
-                lineHeight: 1.6
-              }}>
-                Upload CSV or Excel files (.xlsx, .xls) containing periodical titles from each database you want to check against. (No need to reload databases every time - if you see files below, then scroll down to search.)
-                <br />
-                
-              </p>
-              
-              <label style={{
-                display: 'inline-block',
-                padding: '1rem 2rem',
-                background: 'linear-gradient(135deg, #2d3436 0%, #434a4d 100%)',
-                color: 'white',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '1rem',
-                fontWeight: 500,
-                border: '2px solid #e0ddd8'
-              }}>
-                <input
-                  type="file"
-                  multiple
-                  accept=".csv,.xlsx,.xls"
-                  onChange={handleFileUpload}
-                  ref={fileInputRef}
-                  style={{ display: 'none' }}
-                />
-                📁 Select Database Files
-              </label>
-
-              {parseErrors.length > 0 && (
-                <div style={{ marginTop: '2rem', background: '#fff5f5', border: '2px solid #d63031', borderRadius: '6px', padding: '1.5rem' }}>
-                  <h3 style={{ margin: '0 0 1rem 0', color: '#d63031', fontSize: '0.85rem', textTransform: 'uppercase' }}>
-                    ⚠️ File Parsing Errors ({parseErrors.length})
-                  </h3>
-                  {parseErrors.map((error, index) => (
-                    <div key={index} style={{ padding: '0.75rem', background: 'white', borderRadius: '4px', marginBottom: '0.5rem' }}>
-                      <div style={{ fontWeight: 600, color: '#2d3436' }}>{error.fileName}</div>
-                      <div style={{ fontSize: '0.85rem', color: '#636e72' }}>{error.error}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {databases.length > 0 && (
-                <div style={{ marginTop: '2rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                    <h3 style={{ margin: 0, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>
-                      Loaded Databases ({databases.length})
-                    </h3>
-                    <button onClick={clearAllDatabases} style={{
-                      padding: '0.5rem 1rem',
-                      background: 'transparent',
-                      border: '1px solid #d63031',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '0.85rem',
-                      color: '#d63031'
-                    }}>
-                      Clear All Data
-                    </button>
-                  </div>
-                  {databases.map((db) => (
-                    <div key={db.id} style={{
-                      padding: '1.25rem',
-                      background: '#f8f7f5',
-                      borderRadius: '6px',
-                      border: '1px solid #e8e4df',
-                      marginBottom: '0.75rem'
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <div>
-                          <div style={{ fontWeight: 600, color: '#2d3436' }}>{getDisplayName(db.name)}</div>
-                          <div style={{ fontSize: '0.85rem', color: '#636e72' }}>
-                            {db.rows.length.toLocaleString()} titles
-                          </div>
-                        </div>
-                        <button onClick={() => clearDatabase(db.id)} style={{
-                          padding: '0.5rem 1rem',
-                          background: 'transparent',
-                          border: '1px solid #dfe6e9',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '0.9rem',
-                          color: '#636e72'
-                        }}>
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
             {/* Results */}
             {searchResults && (
               <div style={{
@@ -948,6 +829,125 @@ color: searchQuery.trim() ? '#ffffff' : '#888888',
                 ))}
               </div>
             )}
+
+            {/* Upload Section */}
+            <div style={{
+              background: 'white',
+              borderRadius: '8px',
+              padding: '2.5rem',
+              marginBottom: '2rem',
+              boxShadow: '0 4px 6px rgba(0,0,0,0.05)',
+              border: '1px solid #e0ddd8'
+            }}>
+              <h2 style={{
+                margin: '0 0 1.5rem 0',
+                fontSize: '1.5rem',
+                fontFamily: 'Georgia, serif',
+                color: '#2d3436',
+                fontWeight: 400,
+                borderBottom: '2px solid #54565b',
+                paddingBottom: '0.75rem',
+                display: 'inline-block'
+              }}>
+                2. Upload Database Title Lists
+              </h2>
+              
+              <p style={{
+                color: '#54565b',
+                marginBottom: '1.5rem',
+                lineHeight: 1.6
+              }}>
+                Upload CSV or Excel files (.xlsx, .xls) containing periodical titles from each database you want to check against. (No need to reload databases every time - if you see files below, then scroll down to search.)
+                <br />
+                
+              </p>
+              
+              <label style={{
+                display: 'inline-block',
+                padding: '1rem 2rem',
+                background: 'linear-gradient(135deg, #2d3436 0%, #434a4d 100%)',
+                color: 'white',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '1rem',
+                fontWeight: 500,
+                border: '2px solid #e0ddd8'
+              }}>
+                <input
+                  type="file"
+                  multiple
+                  accept=".csv,.xlsx,.xls"
+                  onChange={handleFileUpload}
+                  ref={fileInputRef}
+                  style={{ display: 'none' }}
+                />
+                📁 Select Database Files
+              </label>
+
+              {parseErrors.length > 0 && (
+                <div style={{ marginTop: '2rem', background: '#fff5f5', border: '2px solid #d63031', borderRadius: '6px', padding: '1.5rem' }}>
+                  <h3 style={{ margin: '0 0 1rem 0', color: '#d63031', fontSize: '0.85rem', textTransform: 'uppercase' }}>
+                    ⚠️ File Parsing Errors ({parseErrors.length})
+                  </h3>
+                  {parseErrors.map((error, index) => (
+                    <div key={index} style={{ padding: '0.75rem', background: 'white', borderRadius: '4px', marginBottom: '0.5rem' }}>
+                      <div style={{ fontWeight: 600, color: '#2d3436' }}>{error.fileName}</div>
+                      <div style={{ fontSize: '0.85rem', color: '#636e72' }}>{error.error}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {databases.length > 0 && (
+                <div style={{ marginTop: '2rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h3 style={{ margin: 0, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>
+                      Loaded Databases ({databases.length})
+                    </h3>
+                    <button onClick={clearAllDatabases} style={{
+                      padding: '0.5rem 1rem',
+                      background: 'transparent',
+                      border: '1px solid #d63031',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      color: '#d63031'
+                    }}>
+                      Clear All Data
+                    </button>
+                  </div>
+                  {databases.map((db) => (
+                    <div key={db.id} style={{
+                      padding: '1.25rem',
+                      background: '#f8f7f5',
+                      borderRadius: '6px',
+                      border: '1px solid #e8e4df',
+                      marginBottom: '0.75rem'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <div>
+                          <div style={{ fontWeight: 600, color: '#2d3436' }}>{getDisplayName(db.name)}</div>
+                          <div style={{ fontSize: '0.85rem', color: '#636e72' }}>
+                            {db.rows.length.toLocaleString()} titles
+                          </div>
+                        </div>
+                        <button onClick={() => clearDatabase(db.id)} style={{
+                          padding: '0.5rem 1rem',
+                          background: 'transparent',
+                          border: '1px solid #dfe6e9',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '0.9rem',
+                          color: '#636e72'
+                        }}>
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Loading */}
             {isLoadingStorage && (
