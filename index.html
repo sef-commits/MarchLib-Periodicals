@@ -827,6 +827,44 @@ color: searchQuery.trim() ? '#ffffff' : '#888888',
                     )}
                   </div>
                 ))}
+
+                {/* Newspapers.com row */}
+                <div style={{
+                  padding: '1.5rem',
+                  background: '#f0f4ff',
+                  borderRadius: '6px',
+                  border: '1px solid #c0cdf5',
+                  marginBottom: '1.5rem',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: '#2d3436' }}>
+                      Newspapers.com
+                    </h3>
+                    <div style={{ fontSize: '0.9rem', color: '#636e72', fontWeight: 500, marginTop: '0.25rem' }}>
+                      Search historical newspaper archives
+                    </div>
+                  </div>
+                  <a
+                    href={`https://basic.newspapers.com/papers/?query=${encodeURIComponent(searchQuery)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      padding: '0.6rem 1.25rem',
+                      background: '#3d5afe',
+                      color: 'white',
+                      borderRadius: '6px',
+                      fontSize: '0.9rem',
+                      fontWeight: 600,
+                      textDecoration: 'none',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    Search Newspapers.com →
+                  </a>
+                </div>
               </div>
             )}
 
